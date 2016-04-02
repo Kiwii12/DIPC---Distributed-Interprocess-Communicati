@@ -180,3 +180,4 @@ rm -rf prog3
 Submission method:  You will use the submit page to submit your program.   The files need to be tarred and gzipped prior to submission.  Please empty the directory prior to tar/zip.  [You will tar up the directory containing the files:  tar -czf prog3.tgz  prog3  .] 
   
  
+Assignment by Dr Jeff McGough 
