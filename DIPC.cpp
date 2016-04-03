@@ -1,4 +1,4 @@
-#import <"server.c">
+#include <"server.c">
 
 
 int main()
