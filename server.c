@@ -39,6 +39,8 @@ int main(int argc , char *argv[])
     //Listen
     listen(socket_desc , 3);
      
+    //need to loop here and use p_threads to host multiple connections
+    
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
     c = sizeof(struct sockaddr_in);
