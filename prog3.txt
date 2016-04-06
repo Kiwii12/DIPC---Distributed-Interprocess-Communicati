@@ -1,0 +1,99 @@
+DSH
+
+Description
+    This program is ment to make a mailbox server for clients to pass messages in.
+
+    
+- THIS WILL ONLY RUN ON LINUX -
+
+Algorithms and libraries used:
+    As for Algorithms, nothing significant was used.
+List of Libraries:
+//for c style input and output
+    #include<stdio.h>
+// for c string functions    
+    #include<string.h>
+// for stoi
+    #include<stdlib.h>
+// for sockets
+    #include<sys/socket.h>
+// for the inet_addr
+    #include<arpa/inet.h> 
+// for the write command
+    #include<unistd.h>
+// for threading
+    #include<pthread.h> 
+        
+Functions and Program structure
+
+dcip
+    the main function starts up a server and handles main memory
+    The other functions handle what happens when a client connects to a server
+    
+dciprm
+    very simple client that sends a very specific kill message to server
+    
+client.py
+    python client given from the project description 
+    https://d2l.sdbor.edu/content/enforced/2015FA/777862-CSC_456_M001_2016SP_538486/program3.html
+    handles simple connections to server
+
+List of functions:
+    //global handlers
+    bool allocateGlobals(char *argv[]);
+    void deallocateGlobals(char *argv[]);
+
+    //checks the argc value
+    bool checkArgc(int argc);
+
+    //handles the argments passed from the python client
+    bool checkArgments(char *currentArg, int sock);
+
+    //handles specific client commands
+    void handleRead(int mailBox, int sock);
+    void handleWrite(int mailBox, int sock);
+    
+    //the thread function - provided by
+    http://www.binarytides.com/server-client-example-c-sockets-linux/
+    void *connection_handler(void *);
+
+Compiling the program:
+    There is a make file provide. Using the make command will compile the
+program. 
+Also the command: "g++ -pthread -o dipc DIPC.cpp -std=c++11" will as well for the main program
+as well as: "g++ -pthread -o dipcrm dipcrm.c" for the removal program
+and python client.py works for running the client
+
+Testing and Verification:
+    The code was tested by manually running the program. Using the python
+    client.
+    Bug - The client works spotty at best
+    Bug - It was increadibly difficult to test this program
+    Bug - The client overall, barely works - what it recieves often lags a command behind
+    
+    Bug - Does not check for deadlocks
+    
+
+Submitted Files:
+    prog3.pdf, DICP.cpp, Makefile, dipcrm.c, client.py
+    
+prog3.pdf = This descriptive document of this project
+DICP.cpp  = The code for this project
+Makefile  = compiling tool for code
+dipcrm.c  = removal client code
+client.py = basic python client that can kindof talk to the server
+
+
+-ClERIFICATION
+due to this from the program description:
+"First line will have a "r" for read, "w" for write, or "q" for  quit and the mailbox number.   
+A line is text and then newline - correct?"
+ 
+ because of this the program expects an enter after a command such as r 1 or w 4.
+
+
+-FAILURES-
+Does not check for deadlocks - only deadlock being if a writer never finishes writing.
+Also does not use Deamon functionality
+
+- side note: I'm not proud of this program... I hated every minute of it.

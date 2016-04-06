@@ -24,6 +24,8 @@
 
 #include <cstring>
 
+#include <algorithm>//for vector
+
 using namespace std;
 
 //global handlers
@@ -45,6 +47,10 @@ int packetSize_global;
 int numberOfMailBoxes_global;
 
 bool isKilled_global = false;
+
+
+vector<int> queVector_global;
+int currentThread_global = 0;
 
 //the thread function
 void *connection_handler(void *);
@@ -73,13 +79,16 @@ int main(int argc , char *argv[])
         {
         	for( int i = 0; i < atoi(argv[1]); i++)
         	{
-        		cout << i << " is in i" << endl;
+        		//cout << i << " is in i" << endl;
         		mutexLocks_global[i] = 0;
         		memset(mailBoxes_global[i], 0, sizeof(mailBoxes_global[i]));
         		strcpy(mailBoxes_global[i], "Empty");
         	}
         }
     }
+
+    //int id = getpid();
+    //cout << "id from main = " << id << endl;
 
     int currentPort = atoi(argv[3]);
     packetSize_global = (atoi(argv[4]) * 1000);
@@ -97,7 +106,7 @@ int main(int argc , char *argv[])
     }
     puts("Socket created");
 
-    cout << "Attempting to connect to port: " << currentPort << endl;
+    //cout << "Attempting to connect to port: " << currentPort << endl;
      
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
@@ -116,16 +125,12 @@ int main(int argc , char *argv[])
     //Listen
     listen(socket_desc , 3);
 
-    cout << "set up on port " << currentPort << endl;
+    //cout << "set up on port " << currentPort << endl;
      
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
     c = sizeof(struct sockaddr_in);
      
-     
-    //Accept and incoming connection
-    puts("Waiting for incoming connections...");
-    c = sizeof(struct sockaddr_in);
     while( isKilled_global || (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
     {
         puts("Connection accepted");
@@ -165,21 +170,24 @@ void *connection_handler(void *socket_desc)
     int sock = *(int*)socket_desc;
     int read_size;
 
+    int id = pthread_self();;
+    //cout << "id from inside connection handler = " << id << endl;
+
 
     char* client_message = new (nothrow) char [packetSize_global];
 
     string message;
      
     //Send some messages to the client
-    message = "Connected, ready to access shared memory\n";
-    write(sock , message.c_str() , strlen(message.c_str()));
+    // message = "Connected, ready to access shared memory\n";
+    // write(sock , message.c_str() , strlen(message.c_str()));
      
     message = "type r to read whats in memory, w to change it, and q to quit \n";
     write(sock , message.c_str() , strlen(message.c_str()));
-    message = "of course, you will also need to supply a mailbox number \n";
-    write(sock , message.c_str() , strlen(message.c_str()));
-    message = "There are " + to_string(numberOfMailBoxes_global) + " mailboxes \n";
-    write(sock , message.c_str() , strlen(message.c_str()));
+    // message = "of course, you will also need to supply a mailbox number \n";
+    // write(sock , message.c_str() , strlen(message.c_str()));
+    // message = "There are " + to_string(numberOfMailBoxes_global) + " mailboxes \n";
+    // write(sock , message.c_str() , strlen(message.c_str()));
     message = "Mailbox numbers start at 1 \n";
     write(sock , message.c_str() , strlen(message.c_str()));
      
@@ -331,14 +339,14 @@ bool checkArgments(char *args, int sock)
 		{
 			if(!tempForArgs.empty())
 			{
-				cout << tempForArgs << " is in tempForArgs" << endl;
+				//cout << tempForArgs << " is in tempForArgs" << endl;
 				parseStringVector.push_back(tempForArgs);
 			}
 		}
 	}
 
 	string currentFront = parseStringVector.at(0);
-	cout << currentFront << " is in currentFront" << endl;
+	//cout << currentFront << " is in currentFront" << endl;
 
 	if( currentFront ==  "KillProgram505")
 	{
@@ -393,14 +401,14 @@ void handleRead(int mailBox, int sock)
 	mailBox--; //puts number in line with arrays
 	string message;
 
-	cout << "This is the handleRead function" << endl;
+	//cout << "This is the handleRead function" << endl;
 
-	cout << "Global Memory:" << endl;
-	for( int i = 0; i < numberOfMailBoxes_global; i++)
-	{
-		cout << "mutexLocks_global [i] = " << mutexLocks_global[i] << endl;
-		cout << "mailBoxes_global[i]   = " << mailBoxes_global[i] << endl;
-	}
+	//cout << "Global Memory:" << endl;
+	// for( int i = 0; i < numberOfMailBoxes_global; i++)
+	// {
+	// 	cout << "mutexLocks_global [i] = " << mutexLocks_global[i] << endl;
+	// 	cout << "mailBoxes_global[i]   = " << mailBoxes_global[i] << endl;
+	// }
 
 
 	if( mailBox >= numberOfMailBoxes_global || mailBox < 0)
@@ -415,7 +423,9 @@ void handleRead(int mailBox, int sock)
 
 	//cout << "mailbox = " << mailBox << " and mutexLocks_global[mailBox] = " << mutexLocks_global[mailBox] < endl;
 	//waiting until unlocked
-	while(mutexLocks_global[mailBox] != 0)
+	//cout << "mailbox = " << mailBox << " and mutexLocks_global[mailBox] = " << mutexLocks_global[mailBox] << endl;
+	//cout << currentThread_global << " = currentThread_global and  = " << pthread_self() << endl;
+	while( (currentThread_global != 0 && mutexLocks_global[mailBox] != 0) || pthread_self() == currentThread_global)
 	{
 		if( count == 0)
 		{
@@ -426,11 +436,15 @@ void handleRead(int mailBox, int sock)
 		// {
 		// 	return;
 		// }
+		if(find(queVector_global.begin(), queVector_global.end(), pthread_self()) == queVector_global.end())
+		{
+			queVector_global.push_back(pthread_self());
+		}
 		count++;
 	}
 
 	message = "Information currently in mailbox " + to_string(mailBox + 1) + ":\n";
-	write(sock , message.c_str() , strlen(message.c_str()));
+	//write(sock , message.c_str() , strlen(message.c_str()));
 	//message = str_cpy(mailBoxes_global[mailBox]) + "\n";
 	//cout << "string length of mailbox shared memory is " << strlen(mailBoxes_global[mailBox]) << endl;
 	if( strlen(mailBoxes_global[mailBox]) > 1)
@@ -442,6 +456,16 @@ void handleRead(int mailBox, int sock)
 		message = "Mailbox currently empty\n";
 		write(sock , message.c_str() , strlen(message.c_str()));
 	}
+
+	if( queVector_global.empty())
+    {
+    	currentThread_global = 0;
+    }
+    else
+    {
+    	currentThread_global = queVector_global.at(0);
+    	remove( queVector_global.begin(), queVector_global.end(), currentThread_global);
+    }
 }
 
 /*********************************************************************//**
@@ -454,7 +478,7 @@ void handleWrite(int mailBox, int sock)
 	mailBox--; //puts number in line with arrays
 	string message;
 
-	cout << "This is the handleWrite function" << endl;
+	//cout << "This is the handleWrite function" << endl;
 
 
 
@@ -471,9 +495,10 @@ void handleWrite(int mailBox, int sock)
 
 	int count = 0;
 
-	//cout << "mailbox = " << mailBox << " and mutexLocks_global[mailBox] = " << mutexLocks_global[mailBox] < endl;
+	//cout << "mailbox = " << mailBox << " and mutexLocks_global[mailBox] = " << mutexLocks_global[mailBox] << endl;
+	//cout << currentThread_global << " = currentThread_global and  = " << pthread_self() << endl;
 	//waiting until unlocked
-	while(mutexLocks_global[mailBox] != 0)
+	while( (currentThread_global != 0 || mutexLocks_global[mailBox] != 0) && pthread_self() != currentThread_global)
 	{
 		if( count == 0)
 		{
@@ -484,14 +509,18 @@ void handleWrite(int mailBox, int sock)
 		// {
 		// 	return;
 		// }
+		if(find(queVector_global.begin(), queVector_global.end(), pthread_self()) == queVector_global.end())
+		{
+			queVector_global.push_back(pthread_self());
+		}
 		count++;
 	}
-	mutexLocks_global[mailBox] = 1;
+	mutexLocks_global[mailBox] = pthread_self();
 
-	message = "Information currently in mailbox " + to_string(mailBox + 1) + ":\n";
-	write(sock , message.c_str() , strlen(message.c_str()));
+	//message = "Information currently in mailbox " + to_string(mailBox + 1) + ":\n";
+	//write(sock , message.c_str() , strlen(message.c_str()));
 	//message = str_cpy(mailBoxes_global[mailBox]) + "\n";
-	cout << "string length of mailbox shared memory is " << strlen(mailBoxes_global[mailBox]) << endl;
+	//cout << "string length of mailbox shared memory is " << strlen(mailBoxes_global[mailBox]) << endl;
 	if( strlen(mailBoxes_global[mailBox]) == 0)
 	{
 		write(sock , mailBoxes_global[mailBox] , strlen(mailBoxes_global[mailBox]));
@@ -518,4 +547,15 @@ void handleWrite(int mailBox, int sock)
     mutexLocks_global[mailBox] = 0;
 
     delete [] client_message;
+
+    cout << currentThread_global << " is in currentThread_global" << endl;
+    if( queVector_global.empty())
+    {
+    	currentThread_global = 0;
+    }
+    else
+    {
+    	currentThread_global = queVector_global.at(0);
+    	remove( queVector_global.begin(), queVector_global.end(), currentThread_global);
+    }
 }
