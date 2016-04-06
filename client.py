@@ -1,6 +1,6 @@
 from socket import *
 HOST = 'localhost'
-PORT = 50007
+PORT = 50004
 s = socket ( AF_INET , SOCK_STREAM ) 
 s.connect((HOST, PORT))
 while True :

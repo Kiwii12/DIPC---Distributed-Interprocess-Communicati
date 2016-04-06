@@ -15,15 +15,34 @@
 #include<unistd.h>    //write
 #include<pthread.h> //for threading , link with lpthread
 
+
+//For Parsing strings
+#include <vector>
+#include <sstream>
+
+#include <iostream> //cout cin endl
+
+#include <cstring>
+
+using namespace std;
+
 //global handlers
 bool allocateGlobals(char *argv[]);
-void deallocateGlobals();
+void deallocateGlobals(char *argv[]);
 
-bool checkArgc(argc);
+bool checkArgc(int argc);
+
+bool checkArgments(char *currentArg, int sock);
+
+void handleRead(int mailBox, int sock);
+void handleWrite(int mailBox, int sock);
  
 
 char** mailBoxes_global;
 int*  mutexLocks_global;
+
+int packetSize_global;
+int numberOfMailBoxes_global;
 
 //the thread function
 void *connection_handler(void *);
@@ -32,19 +51,32 @@ void *connection_handler(void *);
 int main(int argc , char *argv[])
 {
     //check argc value
-    if(checkArgc(argc))
+    if(!checkArgc(argc))
     {
-        cout << "Usage: DIPC <number of mailboxes><size of mailbox in kbytes><port> <size of packet in kbytes>" << endl;
+        cerr << "Usage: DIPC <number of mailboxes><size of mailbox in kbytes><port> <size of packet in kbytes>" << endl;
         return -1;
     }
     else //allocate mems
     {
-        if( !allocateGlobals(char *argv[]) )
+        if( !allocateGlobals(argv) )
         {
             cerr << "failed to allocate memory, exiting" << endl;
             return -2;   
         }
+        else
+        {
+        	for( int i = 0; i < atoi(argv[1]); i++)
+        	{
+        		cout << i << " is in i" << endl;
+        		mutexLocks_global[i] = 0;
+        		strcpy(mailBoxes_global[i], " ");
+        	}
+        }
     }
+
+    int currentPort = atoi(argv[3]);
+    packetSize_global = (atoi(argv[4]) * 1000);
+    numberOfMailBoxes_global = (atoi(argv[1]));
     
     
     int socket_desc , client_sock , c , *new_sock;
@@ -57,11 +89,13 @@ int main(int argc , char *argv[])
         printf("Could not create socket");
     }
     puts("Socket created");
+
+    cout << "Attempting to connect to port: " << currentPort << endl;
      
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons( 8888 );
+    server.sin_port = htons( currentPort );
      
     //Bind
     if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
@@ -74,6 +108,8 @@ int main(int argc , char *argv[])
      
     //Listen
     listen(socket_desc , 3);
+
+    cout << "set up on port " << currentPort << endl;
      
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
@@ -88,7 +124,7 @@ int main(int argc , char *argv[])
         puts("Connection accepted");
          
         pthread_t sniffer_thread;
-        new_sock = malloc(1);
+        new_sock = (int*)malloc(1);
         *new_sock = client_sock;
          
         if( pthread_create( &sniffer_thread , NULL ,  connection_handler , (void*) new_sock) < 0)
@@ -108,6 +144,8 @@ int main(int argc , char *argv[])
         return 1;
     }
      
+    //clean mems
+    deallocateGlobals(argv);
     return 0;
 }
  
@@ -119,20 +157,40 @@ void *connection_handler(void *socket_desc)
     //Get the socket descriptor
     int sock = *(int*)socket_desc;
     int read_size;
-    char *message , client_message[2000];
+
+
+    char* client_message = new (nothrow) char [packetSize_global];
+
+    string message;
      
     //Send some messages to the client
-    message = "Greetings! I am your connection handler\n";
-    write(sock , message , strlen(message));
+    message = "Connected, ready to access shared memory\n";
+    write(sock , message.c_str() , strlen(message.c_str()));
      
-    message = "Now type something and i shall repeat what you type \n";
-    write(sock , message , strlen(message));
+    message = "type r to read whats in memory, w to change it, and q to quit \n";
+    write(sock , message.c_str() , strlen(message.c_str()));
+    message = "of course, you will also need to supply a mailbox number \n";
+    write(sock , message.c_str() , strlen(message.c_str()));
+    message = "There are " + to_string(numberOfMailBoxes_global) + " mailboxes \n";
+    write(sock , message.c_str() , strlen(message.c_str()));
+    message = "Mailbox numbers start at 1 \n";
+    write(sock , message.c_str() , strlen(message.c_str()));
      
     //Receive a message from client
-    while( (read_size = recv(sock , client_message , 2000 , 0)) > 0 )
+    while( (read_size = recv(sock , client_message , packetSize_global , 0)) > 0 )
     {
         //Send the message back to client
-        write(sock , client_message , strlen(client_message));
+        //write(sock , client_message , strlen(client_message));
+
+        //needs to get r, w, q
+        if ( !checkArgments(client_message, sock) )
+    	{
+    		puts("Client disconnected");
+        	fflush(stdout);
+        	return 0;
+    	}
+
+    	memset(client_message, 0, sizeof(client_message));
     }
      
     if(read_size == 0)
@@ -145,18 +203,17 @@ void *connection_handler(void *socket_desc)
         perror("recv failed");
     }
          
-    //clean mems
     //Free the socket pointer
     free(socket_desc);
-    
-    deallocateGlobals();
+
+    delete [] client_message;
      
     return 0;
 }
 
-bool checkArgc(argc)
+bool checkArgc(int argc)
 {
-    if( argc != 4 )
+    if( argc != 5 )
     {
         return false;
     }
@@ -174,19 +231,223 @@ bool allocateGlobals(char *argv[])
     mailBoxes_global = nullptr;
     mutexLocks_global = nullptr;
     
-    mailBoxes_global = new (nothrow) char [argv[0]];
-    mutexLocks_global = new (nothrow) char [argv[0]];
+    mailBoxes_global = new (nothrow) char* [atoi(argv[1])];
+    mutexLocks_global = new (nothrow) int [atoi(argv[1])];
                                             
     if( mailBoxes_global == nullptr || mutexLocks_global == nullptr)
     {
         return false;   
     }
+
+    //loop variables
+	int i = 0;
+	int j = 0;
+
+	//loops through and allocated the second part
+	for (i=0; i < atoi(argv[1]); i++)
+	{
+		mailBoxes_global[i] = new (nothrow) char [((atoi(argv[2])) * 1000)]; //converted to kilobytes
+
+		//delets all allocated memory if an error occured
+		if (mailBoxes_global[i] == nullptr)
+		{
+			for (j=0; j < i; j++)
+			{
+				delete [] mailBoxes_global[j];
+			}
+			delete [] mailBoxes_global;
+			mailBoxes_global = nullptr;
+			return nullptr;
+		}
+	}
     
     return true;    
 }
 
-void deallocateGlobals()
+void deallocateGlobals(char *argv[])
 {
-    delete [] mailBoxes_global;
-    delete [] mutexLocks_global;
+	//loop variable
+	int j = 0;
+
+	//deletes array starting with furthest allocation
+	for (j=0; j < atoi(argv[0]); j++)
+	{
+		delete [] mailBoxes_global[j];
+	}
+	delete [] mailBoxes_global;
+	delete [] mutexLocks_global;
+
+	//sets array back to nullptr
+	mailBoxes_global = nullptr;
+	mutexLocks_global = nullptr;
+}
+
+bool checkArgments(char *args, int sock)
+{
+	string curretnArgs = args;
+	string tempForArgs = "";
+	vector<string> parseStringVector;
+
+	string message = "";
+
+	istringstream myStringStream(curretnArgs);
+	while (getline(myStringStream, tempForArgs, ' '))
+	{
+		istringstream myStringStream2(tempForArgs);
+		while (getline(myStringStream2, message, '\r'))
+		{
+			if(!tempForArgs.empty())
+			{
+				cout << tempForArgs << " is in tempForArgs" << endl;
+				parseStringVector.push_back(tempForArgs);
+			}
+		}
+	}
+
+	string currentFront = parseStringVector.at(0);
+	cout << currentFront << " is in currentFront" << endl;
+
+	if( ( parseStringVector.size() != 2 ) || (!strcmp(currentFront.c_str(), "q")))
+	{
+		message = "Usage: <option> <mailbox #>\n";
+		write(sock , message.c_str() , strlen(message.c_str()));
+		parseStringVector.clear();
+		return true;
+	}
+	else if ( strcmp(currentFront.c_str(), "r"))
+	{
+		int tempInt;
+		string tempString = parseStringVector.at(1);
+		istringstream ( tempString ) >> tempInt;
+		handleRead(tempInt, sock);
+		parseStringVector.clear();
+	}
+	else if ( strcmp(currentFront.c_str(), "w"))
+	{
+		int tempInt;
+		string tempString = parseStringVector.at(1);
+		istringstream ( tempString ) >> tempInt;
+		handleWrite(tempInt, sock);
+		parseStringVector.clear();
+	}
+	else if ( strcmp(currentFront.c_str(), "q"))
+	{ 
+		parseStringVector.clear();
+		return false;
+	}
+
+	parseStringVector.clear();
+	return true;
+}
+
+void handleRead(int mailBox, int sock)
+{
+	mailBox--; //puts number in line with arrays
+	string message;
+
+	if( mailBox >= numberOfMailBoxes_global || mailBox < 0)
+	{
+		//Send some messages to the client
+		message = "invalid mailbox\n";
+		write(sock , message.c_str() , strlen(message.c_str()));
+		return;
+	}
+
+	int count = 0;
+
+	//cout << "mailbox = " << mailBox << " and mutexLocks_global[mailBox] = " << mutexLocks_global[mailBox] < endl;
+	//waiting until unlocked
+	while(mutexLocks_global[mailBox] != 0)
+	{
+		if( count == 0)
+		{
+			message = "waiting for writer\n";
+			write(sock , message.c_str() , strlen(message.c_str()));
+		}
+		// if( count > 1000 )
+		// {
+		// 	return;
+		// }
+		count++;
+	}
+
+	message = "Information currently in mailbox " + to_string(mailBox + 1) + ":\n";
+	write(sock , message.c_str() , strlen(message.c_str()));
+	//message = str_cpy(mailBoxes_global[mailBox]) + "\n";
+	//cout << "string length of mailbox shared memory is " << strlen(mailBoxes_global[mailBox]) << endl;
+	if( strlen(mailBoxes_global[mailBox]) > 1)
+	{
+		write(sock , mailBoxes_global[mailBox] , strlen(mailBoxes_global[mailBox]));
+	}
+	else
+	{
+		message = "Mailbox currently empty\n";
+		write(sock , message.c_str() , strlen(message.c_str()));
+	}
+}
+
+void handleWrite(int mailBox, int sock)
+{
+	mailBox--; //puts number in line with arrays
+	string message;
+
+	char* client_message = new (nothrow) char [packetSize_global];
+
+	if( mailBox >= numberOfMailBoxes_global || mailBox < 0)
+	{
+		//Send some messages to the client
+		message = "invalid mailbox\n";
+		write(sock , message.c_str() , strlen(message.c_str()));
+		return;
+	}
+
+	int count = 0;
+
+	//cout << "mailbox = " << mailBox << " and mutexLocks_global[mailBox] = " << mutexLocks_global[mailBox] < endl;
+	//waiting until unlocked
+	while(mutexLocks_global[mailBox] != 0)
+	{
+		if( count == 0)
+		{
+			message = "waiting for writer\n";
+			write(sock , message.c_str() , strlen(message.c_str()));
+		}
+		// if( count > 1000 )
+		// {
+		// 	return;
+		// }
+		count++;
+	}
+	mutexLocks_global[mailBox] = 1;
+
+	message = "Information currently in mailbox " + to_string(mailBox + 1) + ":\n";
+	write(sock , message.c_str() , strlen(message.c_str()));
+	//message = str_cpy(mailBoxes_global[mailBox]) + "\n";
+	cout << "string length of mailbox shared memory is " << strlen(mailBoxes_global[mailBox]) << endl;
+	if( strlen(mailBoxes_global[mailBox]) == 0)
+	{
+		write(sock , mailBoxes_global[mailBox] , strlen(mailBoxes_global[mailBox]));
+	}
+	else
+	{
+		message = "Mailbox currently empty\n";
+		write(sock , message.c_str() , strlen(message.c_str()));
+	}
+
+	message = "Input new message now\n";
+	write(sock, message.c_str(), strlen(message.c_str()));
+
+	int read_size = recv(sock , client_message , packetSize_global , 0);
+
+	//Send the message back to client
+    write(sock , client_message , strlen(client_message));
+
+    message = "Will be writen to the mailbox\n";
+    write(sock, message.c_str(), strlen(message.c_str()));
+
+    strcpy(mailBoxes_global[mailBox], client_message);
+
+    mutexLocks_global[mailBox] = 0;
+
+    delete [] client_message;
 }
