@@ -44,6 +44,8 @@ int*  mutexLocks_global;
 int packetSize_global;
 int numberOfMailBoxes_global;
 
+bool isKilled_global = false;
+
 //the thread function
 void *connection_handler(void *);
 
@@ -124,7 +126,7 @@ int main(int argc , char *argv[])
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
     c = sizeof(struct sockaddr_in);
-    while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
+    while( isKilled_global || (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
     {
         puts("Connection accepted");
          
@@ -337,6 +339,14 @@ bool checkArgments(char *args, int sock)
 
 	string currentFront = parseStringVector.at(0);
 	cout << currentFront << " is in currentFront" << endl;
+
+	if( currentFront ==  "KillProgram505")
+	{
+		cout << "Killing Server" << endl;
+		isKilled_global = true;
+		return false;
+
+	}
 
 	//if only 1 argument that isn't q
 	if( ( parseStringVector.size() != 2 ) || currentFront == "q")
