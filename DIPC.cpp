@@ -69,7 +69,8 @@ int main(int argc , char *argv[])
         	{
         		cout << i << " is in i" << endl;
         		mutexLocks_global[i] = 0;
-        		strcpy(mailBoxes_global[i], " ");
+        		memset(mailBoxes_global[i], 0, sizeof(mailBoxes_global[i]));
+        		strcpy(mailBoxes_global[i], "Empty");
         	}
         }
     }
@@ -191,6 +192,7 @@ void *connection_handler(void *socket_desc)
     	}
 
     	memset(client_message, 0, sizeof(client_message));
+    	fflush(stdout);
     }
      
     if(read_size == 0)
@@ -307,14 +309,14 @@ bool checkArgments(char *args, int sock)
 	string currentFront = parseStringVector.at(0);
 	cout << currentFront << " is in currentFront" << endl;
 
-	if( ( parseStringVector.size() != 2 ) || (!strcmp(currentFront.c_str(), "q")))
+	if( ( parseStringVector.size() != 2 ) || currentFront == "q")
 	{
 		message = "Usage: <option> <mailbox #>\n";
 		write(sock , message.c_str() , strlen(message.c_str()));
 		parseStringVector.clear();
 		return true;
 	}
-	else if ( strcmp(currentFront.c_str(), "r"))
+	else if ( currentFront == "r")
 	{
 		int tempInt;
 		string tempString = parseStringVector.at(1);
@@ -322,7 +324,7 @@ bool checkArgments(char *args, int sock)
 		handleRead(tempInt, sock);
 		parseStringVector.clear();
 	}
-	else if ( strcmp(currentFront.c_str(), "w"))
+	else if ( currentFront == "w")
 	{
 		int tempInt;
 		string tempString = parseStringVector.at(1);
@@ -344,6 +346,16 @@ void handleRead(int mailBox, int sock)
 {
 	mailBox--; //puts number in line with arrays
 	string message;
+
+	cout << "This is the handleRead function" << endl;
+
+	cout << "Global Memory:" << endl;
+	for( int i = 0; i < numberOfMailBoxes_global; i++)
+	{
+		cout << "mutexLocks_global [i] = " << mutexLocks_global[i] << endl;
+		cout << "mailBoxes_global[i]   = " << mailBoxes_global[i] << endl;
+	}
+
 
 	if( mailBox >= numberOfMailBoxes_global || mailBox < 0)
 	{
@@ -390,6 +402,11 @@ void handleWrite(int mailBox, int sock)
 {
 	mailBox--; //puts number in line with arrays
 	string message;
+
+	cout << "This is the handleWrite function" << endl;
+
+
+
 
 	char* client_message = new (nothrow) char [packetSize_global];
 
