@@ -47,7 +47,11 @@ int numberOfMailBoxes_global;
 //the thread function
 void *connection_handler(void *);
 
-
+/*********************************************************************//**
+ *	Main
+ *
+ * 	Creates the Server and allocateds the shared memory
+*//**********************************************************************/
 int main(int argc , char *argv[])
 {
     //check argc value
@@ -213,6 +217,12 @@ void *connection_handler(void *socket_desc)
     return 0;
 }
 
+/*********************************************************************//**
+ *	checkArgc
+ *
+ * 	simple function that just checks if the right amount of args are
+ *		passed in.
+*//**********************************************************************/
 bool checkArgc(int argc)
 {
     if( argc != 5 )
@@ -225,6 +235,11 @@ bool checkArgc(int argc)
     }
 }
 
+/*********************************************************************//**
+ *	allocateGlobals
+ *
+ * 	allocates the memory for the global arrays
+*//**********************************************************************/
 bool allocateGlobals(char *argv[])
 {
     //argv should consist of <number of mailboxes>  
@@ -266,13 +281,18 @@ bool allocateGlobals(char *argv[])
     return true;    
 }
 
+/*********************************************************************//**
+ *	deallocateGlobals
+ *
+ * 	deallocates the memory for the global arrays
+*//**********************************************************************/
 void deallocateGlobals(char *argv[])
 {
 	//loop variable
 	int j = 0;
 
 	//deletes array starting with furthest allocation
-	for (j=0; j < atoi(argv[0]); j++)
+	for (j=0; j < atoi(argv[1]); j++)
 	{
 		delete [] mailBoxes_global[j];
 	}
@@ -284,6 +304,13 @@ void deallocateGlobals(char *argv[])
 	mutexLocks_global = nullptr;
 }
 
+
+/*********************************************************************//**
+ *	checkArgments
+ *
+ * 	parses the input from user and determines what the user is trying
+ *		to do with the mail box system.
+*//**********************************************************************/
 bool checkArgments(char *args, int sock)
 {
 	string curretnArgs = args;
@@ -296,7 +323,9 @@ bool checkArgments(char *args, int sock)
 	while (getline(myStringStream, tempForArgs, ' '))
 	{
 		istringstream myStringStream2(tempForArgs);
-		while (getline(myStringStream2, message, '\r'))
+		//attempted to remove charage return so that telnet would work
+		//it didn't work
+		while (getline(myStringStream2, message, '\r')) 
 		{
 			if(!tempForArgs.empty())
 			{
@@ -309,13 +338,14 @@ bool checkArgments(char *args, int sock)
 	string currentFront = parseStringVector.at(0);
 	cout << currentFront << " is in currentFront" << endl;
 
+	//if only 1 argument that isn't q
 	if( ( parseStringVector.size() != 2 ) || currentFront == "q")
 	{
 		message = "Usage: <option> <mailbox #>\n";
 		write(sock , message.c_str() , strlen(message.c_str()));
 		parseStringVector.clear();
 		return true;
-	}
+	} //if argument is r
 	else if ( currentFront == "r")
 	{
 		int tempInt;
@@ -323,7 +353,7 @@ bool checkArgments(char *args, int sock)
 		istringstream ( tempString ) >> tempInt;
 		handleRead(tempInt, sock);
 		parseStringVector.clear();
-	}
+	} //if argument is w
 	else if ( currentFront == "w")
 	{
 		int tempInt;
@@ -331,17 +361,23 @@ bool checkArgments(char *args, int sock)
 		istringstream ( tempString ) >> tempInt;
 		handleWrite(tempInt, sock);
 		parseStringVector.clear();
-	}
+	} //if argument is q
 	else if ( strcmp(currentFront.c_str(), "q"))
 	{ 
 		parseStringVector.clear();
 		return false;
 	}
 
-	parseStringVector.clear();
+	parseStringVector.clear(); //make gosh darn sure there is no overwrite
 	return true;
 }
 
+
+/*********************************************************************//**
+ *	handleRead
+ *
+ * 	handles reading from mailbox - only allows read when no one is writing
+*//**********************************************************************/
 void handleRead(int mailBox, int sock)
 {
 	mailBox--; //puts number in line with arrays
@@ -398,6 +434,11 @@ void handleRead(int mailBox, int sock)
 	}
 }
 
+/*********************************************************************//**
+ *	handleWrite
+ *
+ * 	handles writing mailbox - will lock mailbox until done.
+*//**********************************************************************/
 void handleWrite(int mailBox, int sock)
 {
 	mailBox--; //puts number in line with arrays
